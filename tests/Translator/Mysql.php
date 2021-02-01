@@ -313,6 +313,22 @@ class Translator_Mysql_Test extends TranslatorCase
 				});
 		});
 
+		// deep nesting
+		$this->assertQueryTranslation('select * from `phpunit` where ( `a` = ? or `c` = ? or ( `d` = ? and `f` = ? ) )', array('b', 'd', 'e', 'g'), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->where(function( $q )
+				{
+					$q->where('a', 'b');
+					$q->orWhere('c', 'd');
+					$q->orWhere(function($q) 
+					{
+						$q->where('d', 'e');
+						$q->andWhere('f', 'g');
+					});
+				});
+		});
+
 		// arrays
 		$this->assertQueryTranslation('select * from `phpunit` where ( `name` = ? and `age` = ? )', array('foo', 18), function($q) 
 		{
@@ -339,6 +355,85 @@ class Translator_Mysql_Test extends TranslatorCase
 		{
 			return $q->table('phpunit')->select()
 				->whereNull('user.updated');
+		});
+	}
+
+	/**
+	 * mysql grammar tests
+	 */
+	public function testHaving()
+	{
+		// simple
+		$this->assertQueryTranslation('select * from `phpunit` group by `age` having `age` = ?', array(42), function($q) 
+		{
+			return $q->table('phpunit')->select()->groupBy('age')->having('age', 42);
+		});
+
+		// diffrent expression
+		$this->assertQueryTranslation('select * from `phpunit` having `id` != ?', array(42), function($q) 
+		{
+			return $q->table('phpunit')->select()->having('id', '!=', 42);
+		});
+
+		// raw value
+		$this->assertQueryTranslation('select * from `phpunit` having `id` != 42', array(), function($q) 
+		{
+			return $q->table('phpunit')->select()->having('id', '!=', new Expression('42'));
+		});
+
+		// 2 havings
+		$this->assertQueryTranslation('select * from `phpunit` having `id` = ? and `active` = ?', array(42, 1), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->having('id', 42 )
+				->having('active', 1);
+		});
+
+		// 2 havings or
+		$this->assertQueryTranslation('select * from `phpunit` having `id` = ? or `active` = ?', array(42, 1), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->having('id', 42 )
+				->orHaving('active', 1);
+		});
+
+		// nesting
+		$this->assertQueryTranslation('select * from `phpunit` having ( `a` = ? or `c` = ? )', array('b', 'd'), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->having(function( $q )
+				{
+					$q->having('a', 'b');
+					$q->orHaving('c', 'd');
+				});
+		});
+
+		// arrays
+		$this->assertQueryTranslation('select * from `phpunit` having ( `name` = ? and `age` = ? )', array('foo', 18), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->having(array( 'name' => 'foo', 'age' => 18 ));
+		});
+
+		//  having in
+		$this->assertQueryTranslation('select * from `phpunit` having `id` in (?, ?, ?)', array(23, 213, 53), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->havingIn('id', array(23, 213, 53));
+		});
+
+		// having not in
+		$this->assertQueryTranslation('select * from `phpunit` having `id` not in (?, ?, ?)', array(23, 213, 53), function($q)
+		{
+			return $q->table('phpunit')->select()
+				->havingNotIn('id', array(23, 213, 53));
+		});
+
+		//  having null
+		$this->assertQueryTranslation('select * from `phpunit` having `user`.`updated` is NULL', array(), function($q) 
+		{
+			return $q->table('phpunit')->select()
+				->havingNull('user.updated');
 		});
 	}
 
@@ -457,6 +552,37 @@ class Translator_Mysql_Test extends TranslatorCase
 		{
 			return $q->table('db1.users as u')->select()->join('db1.groups as g', 'u.id', '=', new Expression('`g`.`user_id` AND `g`.active = 1'));
 		});
+
+		// with subselect
+		$this->assertQueryTranslation('select `u`.`name`, `like_count`.`count` from `db1`.`users` as `u` left join (select count(*) as `count`, `user_id` from `likes` as `l` group by `l`.`user_id`) as `like_count` on `u`.`id` = `like_count`.`user_id`', array(), function($q) 
+		{
+			$likeCount = $q->table('likes as l')
+				->select()
+				->groupBy('l.user_id')
+				->addFieldCount($q->raw('*'), 'count')
+				->addField('user_id');
+
+			return $q->table('db1.users as u')
+				->select(['u.name', 'like_count.count'])
+				->join(['like_count' => $likeCount], 'u.id', '=', 'like_count.user_id');
+		});
+
+		// with subselect
+		$this->assertQueryTranslation('select `u`.`name`, `like_count`.`count` from `db1`.`users` as `u` left join (select count(*) as `count`, `user_id` from `likes` as `l` where `date` < ? group by `l`.`user_id`) as `like_count` on `u`.`id` = `like_count`.`user_id` right join `something` as `s` on `s`.`user_id` = `u`.`id`', array('2001-01-01'), function($q) 
+		{
+			$likeCount = $q->table('likes as l')
+				->select()
+				->groupBy('l.user_id')
+				->addFieldCount($q->raw('*'), 'count')
+				->addField('user_id')
+				->where('date', '<', '2001-01-01');
+
+			return $q->table('db1.users as u')
+				->select(['u.name', 'like_count.count'])
+				->join(['like_count' => $likeCount], 'u.id', '=', 'like_count.user_id')
+				->rightJoin('something as s', 's.user_id', '=', 'u.id');
+		});
+
 	}
 
 	/**
@@ -518,6 +644,39 @@ class Translator_Mysql_Test extends TranslatorCase
 					$q->where('avatars.active', 1);
 					$q->orWhere('avatar.public', 1);
 				});
+		});
+	}
+
+	public function testSubselect()
+	{
+		$this->assertQueryTranslation('select * from (select * from `contact`) as `b` order by `name` asc', array(), function($q) 
+		{
+			return $q->select(['b' => function($q) 
+			{
+			    $q->table('contact');
+			}])
+			->orderBy('name');
+		});
+
+		$this->assertQueryTranslation('select * from (select * from `contact` where `age` > ?) as `b` order by `name` asc', array(18), function($q) 
+		{
+			return $q->select(['b' => function($q) 
+			{
+			    $q->table('contact');
+			    $q->where('age', '>', 18);
+			}])
+			->orderBy('name');
+		});
+
+		$this->assertQueryTranslation('select * from (select `c`.`name` from `contact` as `c` inner join `phone_numbers` as `n` on `n`.`id` = `c`.`phone_id`) as `b` order by `name` asc', array(), function($q) 
+		{
+			return $q->select(['b' => function($q) 
+			{
+			    $q->table('contact as c');
+			    $q->fields(['c.name']);
+			    $q->innerJoin('phone_numbers as n', 'n.id', '=', 'c.phone_id');
+			}])
+			->orderBy('name');
 		});
 	}
 
