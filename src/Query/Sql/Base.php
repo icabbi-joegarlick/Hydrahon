@@ -14,14 +14,14 @@ class Base extends BaseQuery
     /**
      * The database the query should be executed on
      * 
-     * @var string
+     * @var string|null
      */
     protected $database = null;
 
     /**
      * The table the query should be executed on
      * 
-     * @var string
+     * @var string|null
      */
     protected $table = null;
 
@@ -52,8 +52,8 @@ class Base extends BaseQuery
      *     // selecting table and database
      *     $h->table('db_mydatabase.posts')
      *
-     * @param string                   $table
-     * @return self
+     * @param string|\Closure                   $table
+     * @return static
      */
     public function table($table, $alias = null)
     {

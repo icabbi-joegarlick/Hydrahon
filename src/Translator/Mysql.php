@@ -33,8 +33,8 @@ class Mysql implements TranslatorInterface
 
     /**
      * The current query attributes
-     * 
-     * @param array
+     *
+     * @var array
      */
     protected $attributes = array();
 
@@ -42,7 +42,7 @@ class Mysql implements TranslatorInterface
      * Translate the given query object and return the results as
      * argument array
      *
-     * @param ClanCats\Hydrahon\BaseQuery                 $query
+     * @param BaseQuery                 $query
      * @return array
      */
     public function translate(BaseQuery $query)
@@ -126,7 +126,7 @@ class Mysql implements TranslatorInterface
     /**
      * Check if the given argument is an sql function
      *
-     * @param mixed                 $expression
+     * @param mixed                 $function
      * @return bool
      */
     protected function isFunction($function)
@@ -714,7 +714,6 @@ class Mysql implements TranslatorInterface
     /**
      * Build the limit and offset part
      *
-     * @param Query         $query
      * @return string
      */
     protected function translateLimitWithOffset()
@@ -725,7 +724,6 @@ class Mysql implements TranslatorInterface
     /**
      * Build the limit and offset part
      *
-     * @param Query         $query
      * @return string
      */
     protected function translateLimit()
